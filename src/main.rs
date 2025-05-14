@@ -1,4 +1,8 @@
-mod uinput;
+#[allow(clippy::all)]
+mod uinput {
+    include!(concat!(env!("OUT_DIR"), "/uinput.rs"));
+}
+
 mod virtual_input;
 
 use std::{sync::mpsc::RecvTimeoutError, thread, time::Duration};
@@ -18,17 +22,17 @@ fn main() {
     let (tx, rx) = std::sync::mpsc::channel();
 
     thread::spawn(move || {
-        let mouse = virtual_input::VirtualMouse::new();
+        let mouse = virtual_input::VirtualMouse::new().expect("Failed to create virtual mouse");
         let mut is_autoclicking = false;
 
         loop {
             if is_autoclicking {
-                mouse.left_click();
+                mouse.left_click().expect("Click event failed");
             }
 
             match rx.recv_timeout(Duration::from_millis(50)) {
                 Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => panic!("Disconnected"),
+                Err(RecvTimeoutError::Disconnected) => break,
                 Ok(VirtualDeviceCmd::EnableAutoclick) => is_autoclicking = true,
                 Ok(VirtualDeviceCmd::DisableAutoclick) => is_autoclicking = false,
             };
@@ -55,12 +59,16 @@ fn main() {
 
         let sender = tx.clone();
         start_button.connect_clicked(move |_| {
-            let _ = sender.send(VirtualDeviceCmd::EnableAutoclick);
+            sender
+                .send(VirtualDeviceCmd::EnableAutoclick)
+                .expect("Failed to send message");
         });
 
         let sender = tx.clone();
         stop_button.connect_clicked(move |_| {
-            let _ = sender.send(VirtualDeviceCmd::DisableAutoclick);
+            sender
+                .send(VirtualDeviceCmd::DisableAutoclick)
+                .expect("Failed to send message");
         });
 
         let gtk_box = gtk4::Box::builder()
