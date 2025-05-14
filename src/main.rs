@@ -1,4 +1,4 @@
-#[allow(clippy::all)]
+#[allow(warnings)]
 mod uinput {
     include!(concat!(env!("OUT_DIR"), "/uinput.rs"));
 }
