@@ -14,6 +14,7 @@ use gtk4::{
 };
 
 enum VirtualDeviceCmd {
+    Ping, // make sure thread is alive for debugging purposes
     EnableAutoclick,
     DisableAutoclick,
 }
@@ -33,11 +34,14 @@ fn main() {
             match rx.recv_timeout(Duration::from_millis(50)) {
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => break,
+                Ok(VirtualDeviceCmd::Ping) => {}
                 Ok(VirtualDeviceCmd::EnableAutoclick) => is_autoclicking = true,
                 Ok(VirtualDeviceCmd::DisableAutoclick) => is_autoclicking = false,
             };
         }
     });
+
+    tx.send(VirtualDeviceCmd::Ping).unwrap();
 
     let app = Application::builder()
         .application_id("com.t4rp.crossclicker")
