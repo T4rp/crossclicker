@@ -40,7 +40,7 @@ fn main() {
     });
 
     let app = Application::builder()
-        .application_id("com.t4rp.autoclickd")
+        .application_id("com.t4rp.crossclicker")
         .build();
 
     app.connect_activate(move |app| {
@@ -49,7 +49,7 @@ fn main() {
             .default_width(500)
             .default_height(400)
             .maximized(false)
-            .title("autoclickd")
+            .title("CrossClicker")
             .build();
 
         window.present();
