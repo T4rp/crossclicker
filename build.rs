@@ -2,7 +2,7 @@ use std::{env, path::PathBuf};
 
 fn main() {
     let binding = bindgen::Builder::default()
-        .header("./src/uinput_wrapper.c")
+        .header("./src/uinput_wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .clang_macro_fallback()
         .generate()
