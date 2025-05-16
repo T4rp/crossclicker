@@ -16,16 +16,16 @@ fn emit_input_event(
             tv_sec: 0 as __time_t,
             tv_usec: 0 as __suseconds_t,
         },
-        type_: t,
-        code,
-        value: val,
+        type_: t as __u16,
+        code: code as __u16,
+        value: val as __s32,
     };
 
     unsafe {
         match libc::write(
             fd,
-            &ie as *const uinput::input_event as *const libc::c_void,
-            std::mem::size_of::<input_event>(),
+            &ie as *const _ as *const libc::c_void,
+            std::mem::size_of::<input_event>() as libc::size_t,
         ) {
             -1 => Err(io::Error::last_os_error()),
             r => Ok(r),
