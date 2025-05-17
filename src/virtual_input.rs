@@ -1,41 +1,60 @@
 use std::{io, os::raw};
 
 use crate::uinput::{
-    self, __s32, __suseconds_t, __time_t, __u16, __u32, UI_DEV_CREATE, UI_DEV_SETUP, input_event,
+    self, __s32, __suseconds_t, __time_t, __u16, __u32, EV_KEY, EV_SYN, SYN_REPORT, UI_DEV_CREATE,
+    UI_DEV_SETUP, input_event,
 };
 use libc::{O_NONBLOCK, O_WRONLY};
 
-fn emit_input_event(
-    fd: libc::c_int,
-    t: __u16,
-    code: __u16,
-    val: __s32,
-) -> io::Result<libc::ssize_t> {
-    let ie = uinput::input_event {
+fn emit_key_event(fd: libc::c_int, code: __u16, val: __s32) -> io::Result<()> {
+    let key_event = uinput::input_event {
         time: uinput::timeval {
             tv_sec: 0 as __time_t,
             tv_usec: 0 as __suseconds_t,
         },
-        type_: t as __u16,
+        type_: EV_KEY as __u16,
         code: code as __u16,
         value: val as __s32,
     };
 
+    let sync_event = uinput::input_event {
+        time: uinput::timeval {
+            tv_sec: 0 as __time_t,
+            tv_usec: 0 as __suseconds_t,
+        },
+        type_: EV_SYN as __u16,
+        code: SYN_REPORT as __u16,
+        value: 0 as __s32,
+    };
+
     unsafe {
-        match libc::write(
+        let res = libc::write(
             fd,
-            &ie as *const _ as *const libc::c_void,
+            &key_event as *const _ as *const libc::c_void,
             std::mem::size_of::<input_event>() as libc::size_t,
-        ) {
-            -1 => Err(io::Error::last_os_error()),
-            r => Ok(r),
+        );
+
+        if res < 0 {
+            return Err(io::Error::last_os_error());
         }
-    }
+
+        let res = libc::write(
+            fd,
+            &sync_event as *const _ as *const libc::c_void,
+            std::mem::size_of::<input_event>() as libc::size_t,
+        );
+
+        if res < 0 {
+            return Err(io::Error::last_os_error());
+        }
+    };
+
+    Ok(())
 }
 
 fn ioctl_int_arg(fd: raw::c_int, op: raw::c_ulong, arg: raw::c_int) -> io::Result<()> {
     unsafe {
-        if uinput::ioctl(fd, op, arg) == -1 {
+        if uinput::safe_ioctl_int(fd, op, arg) == -1 {
             Err(io::Error::last_os_error())
         } else {
             Ok(())
@@ -45,7 +64,7 @@ fn ioctl_int_arg(fd: raw::c_int, op: raw::c_ulong, arg: raw::c_int) -> io::Resul
 
 fn ioctl_no_arg(fd: raw::c_int, op: raw::c_ulong) -> io::Result<()> {
     unsafe {
-        if uinput::ioctl(fd, op) == -1 {
+        if uinput::safe_ioctl_no_arg(fd, op) == -1 {
             Err(io::Error::last_os_error())
         } else {
             Ok(())
@@ -55,7 +74,7 @@ fn ioctl_no_arg(fd: raw::c_int, op: raw::c_ulong) -> io::Result<()> {
 
 fn ioctl_ptr_arg(fd: raw::c_int, op: raw::c_ulong, arg: *const raw::c_void) -> io::Result<()> {
     unsafe {
-        if uinput::ioctl(fd, op, arg) == -1 {
+        if uinput::safe_ioctl_ptr_arg(fd, op, arg) == -1 {
             Err(io::Error::last_os_error())
         } else {
             Ok(())
@@ -97,18 +116,6 @@ impl VirtualMouse {
                 uinput::BTN_LEFT as raw::c_int,
             )?;
 
-            ioctl_int_arg(
-                fd,
-                uinput::UI_SET_KEYBIT as raw::c_ulong,
-                uinput::BTN_RIGHT as raw::c_int,
-            )?;
-
-            ioctl_int_arg(
-                fd,
-                uinput::UI_SET_KEYBIT as raw::c_ulong,
-                uinput::BTN_MIDDLE as raw::c_int,
-            )?;
-
             let mut name: [raw::c_char; 80] = [0; 80];
 
             for (i, &b) in b"VirtualMouse".iter().enumerate() {
@@ -141,31 +148,15 @@ impl VirtualMouse {
     }
 
     pub fn left_click(&self) -> io::Result<()> {
-        emit_input_event(
+        emit_key_event(
             self.fd as raw::c_int,
-            uinput::EV_KEY as __u16,
             uinput::BTN_LEFT as __u16,
             1 as raw::c_int,
         )?;
 
-        emit_input_event(
+        emit_key_event(
             self.fd as raw::c_int,
-            uinput::EV_SYN as __u16,
-            uinput::SYN_REPORT as __u16,
-            0 as raw::c_int,
-        )?;
-
-        emit_input_event(
-            self.fd as raw::c_int,
-            uinput::EV_KEY as __u16,
             uinput::BTN_LEFT as __u16,
-            0 as raw::c_int,
-        )?;
-
-        emit_input_event(
-            self.fd as raw::c_int,
-            uinput::EV_SYN as __u16,
-            uinput::SYN_REPORT as __u16,
             0 as raw::c_int,
         )?;
 
@@ -173,31 +164,15 @@ impl VirtualMouse {
     }
 
     pub fn right_click(&self) -> io::Result<()> {
-        emit_input_event(
+        emit_key_event(
             self.fd as raw::c_int,
-            uinput::EV_KEY as __u16,
             uinput::BTN_RIGHT as __u16,
             1 as raw::c_int,
         )?;
 
-        emit_input_event(
+        emit_key_event(
             self.fd as raw::c_int,
-            uinput::EV_SYN as __u16,
-            uinput::SYN_REPORT as __u16,
-            0 as raw::c_int,
-        )?;
-
-        emit_input_event(
-            self.fd as raw::c_int,
-            uinput::EV_KEY as __u16,
             uinput::BTN_RIGHT as __u16,
-            0 as raw::c_int,
-        )?;
-
-        emit_input_event(
-            self.fd as raw::c_int,
-            uinput::EV_SYN as __u16,
-            uinput::SYN_REPORT as __u16,
             0 as raw::c_int,
         )?;
 

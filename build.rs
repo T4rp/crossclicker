@@ -1,6 +1,10 @@
 use std::{env, path::PathBuf};
 
 fn main() {
+    cc::Build::new()
+        .file("src/uinput_wrapper.c")
+        .compile("uinput_wrapper");
+
     let binding = bindgen::Builder::default()
         .header("./src/uinput_wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
