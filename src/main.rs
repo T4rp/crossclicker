@@ -10,12 +10,12 @@ use std::{sync::mpsc::RecvTimeoutError, thread, time::Duration};
 use gtk4::{
     Application, ApplicationWindow, Button,
     gio::prelude::{ApplicationExt, ApplicationExtManual},
-    prelude::{BoxExt, ButtonExt, GtkWindowExt},
+    prelude::{BoxExt, ButtonExt, EditableExt, GtkWindowExt},
 };
 
 enum VirtualDeviceCmd {
     Ping, // make sure thread is alive for debugging purposes
-    EnableAutoclick,
+    EnableAutoclick(Duration),
     DisableAutoclick,
 }
 
@@ -24,18 +24,23 @@ fn main() {
 
     thread::spawn(move || {
         let mouse = virtual_input::VirtualMouse::new().expect("Failed to create virtual mouse");
+
         let mut is_autoclicking = false;
+        let mut speed = Duration::from_millis(50);
 
         loop {
             if is_autoclicking {
                 mouse.left_click().expect("Click event failed");
             }
 
-            match rx.recv_timeout(Duration::from_millis(50)) {
+            match rx.recv_timeout(speed) {
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => break,
                 Ok(VirtualDeviceCmd::Ping) => {}
-                Ok(VirtualDeviceCmd::EnableAutoclick) => is_autoclicking = true,
+                Ok(VirtualDeviceCmd::EnableAutoclick(s)) => {
+                    speed = s;
+                    is_autoclicking = true;
+                }
                 Ok(VirtualDeviceCmd::DisableAutoclick) => is_autoclicking = false,
             };
         }
@@ -58,13 +63,26 @@ fn main() {
 
         window.present();
 
+        let speed_entry = gtk4::Entry::builder()
+            .placeholder_text("speed (ms)")
+            .input_purpose(gtk4::InputPurpose::Digits)
+            .text("50")
+            .build();
+
         let start_button = Button::builder().label("start").build();
         let stop_button = Button::builder().label("stop").build();
 
         let sender = tx.clone();
+
+        let se = speed_entry.clone();
         start_button.connect_clicked(move |_| {
+            let text = se.text();
+            let speed = text.as_str().trim().parse::<u64>().unwrap_or(50).max(50);
+
             sender
-                .send(VirtualDeviceCmd::EnableAutoclick)
+                .send(VirtualDeviceCmd::EnableAutoclick(Duration::from_millis(
+                    speed,
+                )))
                 .expect("Failed to send message");
         });
 
@@ -84,6 +102,7 @@ fn main() {
             .halign(gtk4::Align::Center)
             .build();
 
+        gtk_box.append(&speed_entry);
         gtk_box.append(&start_button);
         gtk_box.append(&stop_button);
 
